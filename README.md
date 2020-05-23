@@ -5,7 +5,7 @@ Simple class for retriving broadband albedo from Landsat 8 imagery
 
 gdal, numpy
 
-LandastBasicUtils | https://github.com/eduard-kazakov/LandastBasicUtils 
+LandsatBasicUtils | https://github.com/eduard-kazakov/LandsatBasicUtils 
 
 Optional requirement: SREMPy-landsat  | https://github.com/eduard-kazakov/SREMPy-landsat. If installed, additional option of reflectance correction is available.
 
@@ -46,18 +46,24 @@ To use SREM correction you must install SREMPyLandsat class, provided and descri
 ```python
 from Landsat8SimpleAlbedo.AlbedoRetriever import AlbedoRetriever
 
-# Use tasumi method with DOS atmospherical correction. With dos or raw correction its simplest scenario, no any additional information required
+# Use tasumi method with DOS atmospherical correction. With dos or raw correction its simplest scenario, no any
+# additional information required
 a = AlbedoRetriever(metadata_file='F:/LC08_L1TP_182019_20190830_20190903_01_T1/LC08_L1TP_182019_20190830_20190903_01_T1_MTL.txt',
                     albedo_method='tasumi',
                     correction_method='dos')
 
+# You can retrieve albedo as array:
+ar = a.get_albedo_as_array()
+
+# Or as geotiff:
 a.save_albedo_as_gtiff('F:/LC08_L1TP_182019_20190830_20190903_01_T1/tasumi_dos_albedo.tif')
 ```
 
 ```python
 from Landsat8SimpleAlbedo.AlbedoRetriever import AlbedoRetriever
 
-# Use olmedo method with SREM correction. Take a look on new necessary options: angles_file, usgs_utils path, cygwin_bash_exe_path, temp_dir 
+# Use olmedo method with SREM correction. Take a look on new necessary options: angles_file, usgs_utils path, 
+# cygwin_bash_exe_path, temp_dir 
 a = AlbedoRetriever(metadata_file='F:/LC08_L1TP_182019_20190830_20190903_01_T1/LC08_L1TP_182019_20190830_20190903_01_T1_MTL.txt',
                     angles_file='F:/LC08_L1TP_182019_20190830_20190903_01_T1/LC08_L1TP_182019_20190830_20190903_01_T1_ANG.txt',
                     temp_dir='F:/LC08_L1TP_182019_20190830_20190903_01_T1/temp',
@@ -72,7 +78,8 @@ a.save_albedo_as_gtiff('F:/LC08_L1TP_182019_20190830_20190903_01_T1/olmedo_srem_
 ```python
 from Landsat8SimpleAlbedo.AlbedoRetriever import AlbedoRetriever
 
-# When using beg method, correction is always must be raw, and DEM file is needed. All reprojections etc. are automated, you just must ensure that DEM is spatially covering while Landsat scene
+# When using beg method, correction is always must be raw, and DEM file is needed. All reprojections etc. are automated,
+# you just must ensure that DEM is spatially covering whole Landsat scene
 a = AlbedoRetriever(metadata_file='F:/LC08_L1TP_182019_20190830_20190903_01_T1/LC08_L1TP_182019_20190830_20190903_01_T1_MTL.txt',
                     albedo_method='beg',
                     correction_method='raw',
