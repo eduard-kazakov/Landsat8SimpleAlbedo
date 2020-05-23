@@ -130,6 +130,7 @@ class AlbedoRetriever():
         elif self.albedo_method in ['beg']:
             etalon_ds = gdal.Open(os.path.join(self.dataset_directory, self.metadata.bands['2']['file_name']))
             geoTransform = etalon_ds.GetGeoTransform()
+            projection = etalon_ds.GetProjection()
             xMin = geoTransform[0]
             yMax = geoTransform[3]
             xMax = xMin + geoTransform[1] * etalon_ds.RasterXSize
@@ -139,7 +140,7 @@ class AlbedoRetriever():
 
             print ('Recalculating DEM to scene domain')
             elevation_ds = gdal.Open(self.dem_file)
-            elevation_ds_converted = gdal.Warp('',elevation_ds,format='MEM',outputBounds = (xMin, yMin, xMax, yMax), width=xSize, height=ySize)
+            elevation_ds_converted = gdal.Warp('',elevation_ds,format='MEM',outputBounds = (xMin, yMin, xMax, yMax), width=xSize, height=ySize, dstSRS=projection)
             elevation_array = elevation_ds_converted.GetRasterBand(1).ReadAsArray()
 
             print('beg calculations')
