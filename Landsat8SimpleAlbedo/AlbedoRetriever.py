@@ -50,6 +50,7 @@ class AlbedoRetriever():
         bands_arrays = []
         if self.correction_method == 'raw':
             for band in bands:
+                print ('Processing band %s' % band)
                 current_band_path = os.path.join(self.dataset_directory, self.metadata.bands[str(band)]['file_name'])
                 current_band_calibrator = LandsatBandCalibrator(current_band_path, self.metadata_file)
                 current_band_reflectance = current_band_calibrator.get_reflectance_as_array()
@@ -57,18 +58,55 @@ class AlbedoRetriever():
 
         if self.correction_method == 'dos':
             for band in bands:
+                print('Processing band %s' % band)
                 current_band_path = os.path.join(self.dataset_directory, self.metadata.bands[str(band)]['file_name'])
                 current_band_calibrator = LandsatBandCalibrator(current_band_path, self.metadata_file)
                 current_band_reflectance = current_band_calibrator.get_dos_corrected_reflectance_as_array()
                 bands_arrays.append(current_band_reflectance)
 
         if self.correction_method == 'srem':
-            #TODO
-            pass
+            from SREMPyLandsat.SREMPyLandsat import SREMPyLandsat
+            for band in bands:
+                print('Processing band %s' % band)
+                srem = SREMPyLandsat(mode='landsat-usgs-utils')
+                data = {'band': os.path.join(self.dataset_directory, self.metadata.bands[str(band)]['file_name']),
+                        'metadata': self.metadata_file,
+                        'angles_file': self.angles_file,
+                        'usgs_util_path': self.usgs_utils,
+                        'temp_dir': self.temp_dir,
+                        'cygwin_bash_exe_path': self.cygwin_bash_exe_path}
+                srem.set_data(data)
+                current_band_reflectance = srem.get_srem_surface_reflectance_as_array()
+                bands_arrays.append(current_band_reflectance)
 
         if self.correction_method == 'mixed_v1':
-            #TODO
-            pass
+            # Empirical optimal combination: b2 - DOS, b3 - srem, b4 - srem, b5 - srem, b6 - raw, b7 - raw
+            from SREMPyLandsat.SREMPyLandsat import SREMPyLandsat
+            for band in bands:
+                print('Processing band %s' % band)
+                current_band_path = os.path.join(self.dataset_directory, self.metadata.bands[str(band)]['file_name'])
+                if band == 2:
+                    print ('Process with DOS')
+                    current_band_calibrator = LandsatBandCalibrator(current_band_path, self.metadata_file)
+                    current_band_reflectance = current_band_calibrator.get_dos_corrected_reflectance_as_array()
+                    bands_arrays.append(current_band_reflectance)
+                if band in [3,4,5]:
+                    print('Process with SREM')
+                    srem = SREMPyLandsat(mode='landsat-usgs-utils')
+                    data = {'band': current_band_path,
+                            'metadata': self.metadata_file,
+                            'angles_file': self.angles_file,
+                            'usgs_util_path': self.usgs_utils,
+                            'temp_dir': self.temp_dir,
+                            'cygwin_bash_exe_path': self.cygwin_bash_exe_path}
+                    srem.set_data(data)
+                    current_band_reflectance = srem.get_srem_surface_reflectance_as_array()
+                    bands_arrays.append(current_band_reflectance)
+                if band in [6,7]:
+                    print('Process as RAW')
+                    current_band_calibrator = LandsatBandCalibrator(current_band_path, self.metadata_file)
+                    current_band_reflectance = current_band_calibrator.get_reflectance_as_array()
+                    bands_arrays.append(current_band_reflectance)
 
         print ('Preparing coefficients. Current method is: %s' % self.albedo_method)
         if self.albedo_method == 'tasumi':
@@ -86,11 +124,11 @@ class AlbedoRetriever():
             print ('Calculating albedo...')
             albedo = coefs[0]*bands_arrays[0] + coefs[1]*bands_arrays[1] + coefs[2]*bands_arrays[2] + coefs[3]*bands_arrays[3] + coefs[4]*bands_arrays[4] + coefs[5]*bands_arrays[5]
             if self.albedo_method == 'liang':
+                print ('Liang method correction: -0.0018')
                 albedo = albedo - 0.0018
 
         elif self.albedo_method in ['beg']:
-            #TODO: test
-            etalon_ds = gdal.Open(self.metadata.bands['2']['file_name'])
+            etalon_ds = gdal.Open(os.path.join(self.dataset_directory, self.metadata.bands['2']['file_name']))
             geoTransform = etalon_ds.GetGeoTransform()
             xMin = geoTransform[0]
             yMax = geoTransform[3]
@@ -99,16 +137,18 @@ class AlbedoRetriever():
             xSize = etalon_ds.RasterXSize
             ySize = etalon_ds.RasterYSize
 
+            print ('Recalculating DEM to scene domain')
             elevation_ds = gdal.Open(self.dem_file)
             elevation_ds_converted = gdal.Warp('',elevation_ds,format='MEM',outputBounds = (xMin, yMin, xMax, yMax), width=xSize, height=ySize)
             elevation_array = elevation_ds_converted.GetRasterBand(1).ReadAsArray()
 
+            print('beg calculations')
             A_TOA = coefs[0]*bands_arrays[0] + coefs[1]*bands_arrays[1] + coefs[2]*bands_arrays[2] + coefs[3]*bands_arrays[3] + coefs[4]*bands_arrays[4] + coefs[5]*bands_arrays[5]
             t_sw = 0.75 + 2 * 0.00001 * elevation_array
             albedo = (A_TOA - self.A_pd) / (t_sw * t_sw)
 
-        albedo[albedo<0] = 0
-        albedo[albedo>1] = 1
+        albedo[albedo<0] = 0.0
+        albedo[albedo>1] = 1.0
         return albedo
 
     def save_albedo_as_gtiff(self, new_file_path):
@@ -130,3 +170,25 @@ class AlbedoRetriever():
 
 #print (a.metadata.bands['2']['file_name'])
 #a.save_albedo_as_gtiff('F:/LC08_L1TP_182019_20190830_20190903_01_T1/olmedo_dos_albedo.tif')
+
+#a = AlbedoRetriever(metadata_file='F:/LC08_L1TP_182019_20190830_20190903_01_T1/LC08_L1TP_182019_20190830_20190903_01_T1_MTL.txt',
+#                    angles_file='F:/LC08_L1TP_182019_20190830_20190903_01_T1/LC08_L1TP_182019_20190830_20190903_01_T1_ANG.txt',
+#                    temp_dir='F:/LC08_L1TP_182019_20190830_20190903_01_T1/temp',
+#                    albedo_method='olmedo',
+#                    correction_method='srem',
+#                    usgs_utils='F:/software/l8_angles/l8_angles.exe',
+#                    cygwin_bash_exe_path='C:/cygwin64/bin/bash.exe',
+#                    dem_file='F:/LC08_L1TP_182019_20190830_20190903_01_T1/DEM.tif')
+#
+#a.save_albedo_as_gtiff('F:/LC08_L1TP_182019_20190830_20190903_01_T1/olmedo_srem_albedo.tif')
+
+a = AlbedoRetriever(metadata_file='F:/LC08_L1TP_182019_20190830_20190903_01_T1/LC08_L1TP_182019_20190830_20190903_01_T1_MTL.txt',
+                    angles_file='F:/LC08_L1TP_182019_20190830_20190903_01_T1/LC08_L1TP_182019_20190830_20190903_01_T1_ANG.txt',
+                    temp_dir='F:/LC08_L1TP_182019_20190830_20190903_01_T1/temp',
+                    albedo_method='beg',
+                    correction_method='raw',
+                    usgs_utils='F:/software/l8_angles/l8_angles.exe',
+                    cygwin_bash_exe_path='C:/cygwin64/bin/bash.exe',
+                    dem_file='F:/LC08_L1TP_182019_20190830_20190903_01_T1/DEM.tif')
+
+a.save_albedo_as_gtiff('F:/LC08_L1TP_182019_20190830_20190903_01_T1/beg_raw_albedo.tif')
